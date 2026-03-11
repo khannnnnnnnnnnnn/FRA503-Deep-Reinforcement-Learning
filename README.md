@@ -18,8 +18,40 @@ Implement and evaluate four model-free control algorithms — Monte Carlo, SARSA
    ```
 3. Run all experiments:
    ```bash
-   python scripts/RL_Algorithm/train_all.py
+   python scripts/RL_Algorithm/train_all.py --task <TASK_NAME> --num_envs <N>
    ```
+
+**Task Selection**
+
+Use the `--task` flag to select which CartPole task to train on:
+
+| Flag | Task |
+|------|------|
+| `--task Stabilize-Isaac-Cartpole-v0` | Cart-Pole stabilization (keep pole upright) |
+| `--task SwingUp-Isaac-Cartpole-v0` | Cart-Pole swing-up (swing pole from bottom to top) |
+
+Example:
+```bash
+# Train on Stabilize task
+python scripts/RL_Algorithm/train_all.py --task Stabilize-Isaac-Cartpole-v0 --headless
+
+# Train on SwingUp task
+python scripts/RL_Algorithm/train_all.py --task SwingUp-Isaac-Cartpole-v0 --headless
+```
+
+**Parallel Environment Selection**
+
+Use the `--num_envs` flag to run multiple environments in parallel, which significantly speeds up training. Higher values use more GPU memory but train faster.
+
+```bash
+# Run with 8 parallel environments (recommended for most GPUs)
+python scripts/RL_Algorithm/train_all.py --task Stabilize-Isaac-Cartpole-v0 --headless --num_envs 8
+
+# Run with 64 parallel environments (for high-end GPUs with more VRAM)
+python scripts/RL_Algorithm/train_all.py --task Stabilize-Isaac-Cartpole-v0 --headless --num_envs 64
+```
+
+> **Note:** Results are saved in separate folders per task (`plots/Stabilize/` and `plots/SwingUp/`), so running both tasks will not overwrite each other's results.
 
 **Alternative: Run Individual Scripts**
 - Train a single algorithm:
