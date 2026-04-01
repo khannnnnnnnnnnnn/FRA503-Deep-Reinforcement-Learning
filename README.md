@@ -1,188 +1,310 @@
-# FRA503 Deep Reinforcement Learning for Robotics
+# HW3: Function Approximation RL for Cart-Pole Stabilization
 
-# Instruction
+FRA503 Deep Reinforcement Learning for Robotics
 
-## Recommend using [Miniconda](https://docs.anaconda.com/miniconda/install/#quick-command-line-install)
+| Name                 | Student ID   |
+| -------------------- | ------------ |
+| Chantouch Orungrote  | 66340500011  |
+| Sasish Kaewsing      | 66340500076  |
 
-Download Miniconda different version, IsaacLab using python version 3.10 [[list of Miniconda](https://repo.anaconda.com/miniconda)].
+## Overview
+
+This homework implements **8 function approximation-based RL algorithms** for the Cart-Pole Stabilization task using Isaac Lab, transitioning from the tabular methods of HW2 to neural and linear function approximators capable of handling continuous state spaces.
+
+### Algorithms Implemented
+
+| Algorithm      | Type          | Policy        | On/Off-Policy | Action Space |
+| -------------- | ------------- | ------------- | ------------- | ------------ |
+| Linear_QN      | Value-based   | Deterministic (ε-greedy) | Off-policy    | Discrete (11) |
+| DQN            | Value-based   | Deterministic (ε-greedy) | Off-policy    | Discrete (11) |
+| MC_REINFORCE   | Policy-based  | Stochastic    | On-policy     | Discrete (11) |
+| AC             | Actor-Critic  | Stochastic    | On-policy     | Continuous    |
+| A2C            | Actor-Critic  | Stochastic    | On-policy     | Continuous    |
+| PPO            | Actor-Critic  | Stochastic    | On-policy     | Continuous    |
+| TD3            | Actor-Critic  | Deterministic | Off-policy    | Continuous    |
+| SAC            | Actor-Critic  | Stochastic    | Off-policy    | Continuous    |
+
+### Class Hierarchy
 
 ```
-curl -O https://repo.anaconda.com/miniconda/Miniconda3-py310_24.11.1-0-Linux-x86_64.sh
+BaseAlgorithm  (RL_base_function.py)
+├── OnPolicyAlgorithm  (storage/on_policy.py)
+│   ├── AC              — Monte Carlo episodic actor-critic
+│   ├── A2C             — TD synchronous advantage actor-critic
+│   └── PPO             — Clipped surrogate + GAE
+├── OffPolicyAlgorithm  (storage/off_policy.py)
+│   ├── DQN             — Deep Q-Network with experience replay
+│   ├── TD3             — Twin Delayed DDPG
+│   └── SAC             — Soft Actor-Critic (max entropy)
+└── (direct)
+    ├── Linear_QN       — Linear function approximation Q-Learning
+    └── MC_REINFORCE    — Vanilla policy gradient with MC returns
 ```
 
-Install Miniconda
+---
 
-```
-bash ~/Miniconda3-py310_24.11.1-0-Linux-x86_64.sh
-```
-
-The installer finishes and displays, “Thank you for installing Miniconda3!”
-
-Close and re-open your terminal window for the installation to fully take effect, or use the following command to refresh the terminal
-
-```
-source ~/.bashrc
-```
-
-### Verifying the Miniconda installation
-
-Test your installation by running `conda list`. If conda has been installed correctly, a list of installed packages appears.
-
-![image-1](https://github.com/user-attachments/assets/5811a5ee-3026-4fe0-b0f7-1fc26899c125)
-
-If you see this, then the installation was successful! 🎉
-
-## Installing Isaac Sim & Isaac Lab
-
-### Pip Installation (recommended for Ubuntu 22.04)
-
-<!-- version main -->
-<!-- Follow the Installing and Verifying steps [[link](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/pip_installation.html)]  -->
-
-<!-- version Isaac 4.5.0 -->
-Follow the Installing and Verifying steps [[link](https://isaac-sim.github.io/IsaacLab/v2.1.0/source/setup/installation/pip_installation.html)]
-
-<!-- ### Binary Installation (recommended for Ubuntu 20.04)
-
-Follow the Installing and Verifying steps [[link](https://isaac-sim.github.io/IsaacLab/main/source/setup/installation/binaries_installation.html)] -->
-
-⚠️ **Important Notice**
-
-IsaacLab **must be installed from the `release/2.1.0` branch** to ensure compatibility.
-Installing from other branches may lead to errors or unexpected behavior.
+## Setup
 
 ```bash
-git clone -b release/2.1.0 https://github.com/isaac-sim/IsaacLab.git
+conda activate env_isaaclab
+cd ~/FRA503_Deep_Reinforcement_Learning/CartPole_4.5.0
 ```
 
-### Verifying the Isaac Lab installation
+---
+
+## Configuration
+
+### Shared Parameters
+
+| Parameter         | Value        | Description                              |
+| ----------------- | ------------ | ---------------------------------------- |
+| `n_episodes`      | 10000        | Total training episodes                  |
+| `max_steps`       | 500          | Maximum steps per episode                |
+| `n_observations`  | 4            | Observation space dimension (x, θ, ẋ, θ̇) |
+| `action_range`    | [-10.0, 10.0]| Continuous force range (N)               |
+| `learning_rate`   | 3e-4         | Base optimizer learning rate             |
+| `discount_factor` | 0.99         | Discount factor (γ)                      |
+
+### Per-Algorithm Hyperparameters
+
+#### Value-Based Methods
+
+| Parameter           | Linear_QN | DQN     |
+| ------------------- | --------- | ------- |
+| `num_of_action`     | 11        | 11      |
+| `learning_rate`     | 1e-3      | 3e-4    |
+| `initial_epsilon`   | 1.0       | 1.0     |
+| `epsilon_decay`     | 5e-4      | 5e-4    |
+| `final_epsilon`     | 0.01      | 0.01    |
+| `hidden_dim`        | —         | 128     |
+| `dropout`           | —         | 0.1     |
+| `tau`               | —         | 0.005   |
+| `buffer_size`       | —         | 50000   |
+| `batch_size`        | —         | 128     |
+| `update_freq`       | —         | 4       |
+| `target_update_freq`| —         | 200     |
+
+#### Policy Gradient
+
+| Parameter       | MC_REINFORCE |
+| --------------- | ------------ |
+| `num_of_action` | 11           |
+| `hidden_dim`    | 128          |
+| `dropout`       | 0.1          |
+
+#### On-Policy Actor-Critic
+
+| Parameter                  | AC    | A2C   | PPO   |
+| -------------------------- | ----- | ----- | ----- |
+| `num_of_action`            | 1     | 1     | 1     |
+| `hidden_dim`               | 256   | 256   | 256   |
+| `entropy_coef`             | 0.01  | 0.01  | 0.01  |
+| `gae_lambda`               | —     | 0.95  | 0.95  |
+| `value_loss_coef`          | —     | 0.5   | 0.5   |
+| `clip_param`               | —     | —     | 0.2   |
+| `num_transitions_per_env`  | —     | 64    | 64    |
+| `num_learning_epochs`      | —     | —     | 4     |
+| `num_mini_batches`         | —     | —     | 4     |
+
+#### Off-Policy Actor-Critic
+
+| Parameter       | TD3       | SAC       |
+| --------------- | --------- | --------- |
+| `num_of_action` | 1         | 1         |
+| `hidden_dim`    | 256       | 256       |
+| `tau`           | 0.005     | 0.005     |
+| `buffer_size`   | 100,000   | 100,000   |
+| `batch_size`    | 256       | 256       |
+| `update_freq`   | 4         | 4         |
+| `policy_noise`  | 0.2       | —         |
+| `noise_clip`    | 0.5       | —         |
+| `expl_noise`    | 0.1       | —         |
+| `policy_delay`  | 2         | —         |
+| `alpha`         | —         | 0.2       |
+| `auto_entropy`  | —         | True      |
+
+---
+
+## Train
+
+### Train All Algorithms (Recommended)
+
+Trains all 8 algorithms sequentially and generates all comparison and deployment plots:
+
+```bash
+python scripts/Function_based/train_all.py \
+    --task Stabilize-Isaac-Cartpole-v0 \
+    --headless \
+    --num_envs 1
+```
+
+Optional arguments:
+
+| Argument            | Default | Description                          |
+| ------------------- | ------- | ------------------------------------ |
+| `--num_envs`        | 1       | Number of parallel environments      |
+| `--max_iterations`  | None    | Override default episode count       |
+| `--deploy_episodes` | 100     | Episodes for deployment evaluation   |
+| `--seed`            | random  | Random seed for reproducibility      |
+| `--video`           | False   | Enable video recording               |
+
+### Train Single Algorithm
+
+```bash
+python scripts/Function_based/train.py \
+    --task Stabilize-Isaac-Cartpole-v0 \
+    --headless --num_envs 1
+```
+
+---
+
+## Play (Deploy Trained Policy)
+
+```bash
+python scripts/Function_based/play.py \
+    --task Stabilize-Isaac-Cartpole-v0 \
+    --num_envs 1 --headless
+```
+
+Deployment uses deterministic action selection for all algorithms:
+
+| Algorithm      | Inference Mode                               |
+| -------------- | -------------------------------------------- |
+| Linear_QN, DQN | ε = 0 (greedy argmax Q)                     |
+| MC_REINFORCE   | Argmax over softmax probabilities            |
+| AC, A2C, PPO   | `act_inference()` (deterministic mean action)|
+| TD3            | `select_action(noise=0.0)`                   |
+| SAC            | `select_action(deterministic=True)`          |
+
+---
+
+## Results
+
+### Output Structure
 
 ```
-# Option 1: Using the isaaclab.sh executable
-# note: this works for both the bundled python and the virtual environment
-./isaaclab.sh -p scripts/tutorials/00_sim/create_empty.py
+plots/{task}/Function_based/
+├── Linear_QN/                      # Per-algorithm plots
+│   ├── learning_curve.png          #   [A] Reward per episode (raw + smoothed)
+│   ├── episode_length_curve.png    #   [B] Steps survived per episode
+│   ├── reward_with_std.png         #   [C] Smoothed reward ± 1-std band
+│   ├── actor_loss_curve.png        #   [D] Actor loss over update steps *
+│   ├── critic_loss_curve.png       #   [E] Critic/value loss over steps *
+│   ├── epsilon_curve.png           #   [F] Epsilon decay schedule **
+│   ├── entropy_curve.png           #   [G] Policy entropy ***
+│   └── steps_vs_reward.png         #   [H] Reward vs total env steps
+├── DQN/
+├── MC_REINFORCE/
+├── AC/
+├── A2C/
+├── PPO/
+├── TD3/
+├── SAC/
+├── comparisons/                    # Cross-algorithm comparisons
+│   ├── comparison_reward.png           # [I]  All algos smoothed reward
+│   ├── comparison_ep_length.png        # [J]  All algos episode length
+│   ├── comparison_steps_reward.png     # [K]  Reward vs env steps (sample efficiency)
+│   ├── comparison_actor_loss.png       # [L]  Actor loss (neural algos)
+│   ├── comparison_critic_loss.png      # [M]  Critic loss (neural algos)
+│   ├── comparison_reward_variance.png  # [R2] Rolling std of reward
+│   └── comparison_solved_episode.png   # [R3] First episode to reach solved threshold
+└── deployment/                     # Deployment evaluation
+    ├── deployment_reward.png               # [N]  Bar: avg reward
+    ├── deployment_ep_length.png            # [O]  Bar: avg episode length
+    ├── deployment_success_rate.png         # [P]  Bar: % episodes reaching max_steps
+    ├── deployment_length_hist.png          # [Q]  Histogram of episode lengths
+    ├── deployment_reward_per_ep.png        # [R]  Per-episode reward line
+    ├── deployment_pole_mean_angle.png      # [R4] Bar: mean |pole angle|
+    ├── deployment_pole_std_angle.png       #      Bar: pole angle std
+    ├── deployment_pole_angle_traces.png    # [S]  Pole angle per algorithm (subplots)
+    ├── deployment_pole_angle_comparison.png#      All algos pole angle overlay
+    ├── deployment_cart_position.png        # [T]  Cart position over time
+    ├── deployment_phase_portrait.png       # [U]  Phase portrait (θ vs θ̇)
+    └── deployment_action_traces.png        # [V]  Applied force over time
 
-# Option 2: Using python in your virtual environment
-python scripts/tutorials/00_sim/create_empty.py
+*   D/E: only for AC, A2C, PPO, TD3, SAC (algorithms with neural actor/critic)
+**  F:   only for Linear_QN, DQN (ε-greedy algorithms)
+*** G:   only for AC, A2C, PPO, SAC (algorithms with entropy tracking)
 ```
 
-![image](https://github.com/user-attachments/assets/07c74fe4-97c1-4a4d-a4e4-8e6b4f51b38c)
-
-If you see this, then the installation was successful! 🎉
-
-
-## Isaac Lab Overview 
-
-This overview introduces **key concepts** in IsaacLab. Focus on the `[link]` required for this class. 
-
-`Optional` sections provide deeper understanding - read these or explore the full IsaacLab documentation based on your interests. 
-
-After reading each section, you should be able to answer these `guiding questions`:
-
-1. **Core Concepts** 
-
-    1.1 Task Design Workflows [[link](https://isaac-sim.github.io/IsaacLab/v2.1.0/source/overview/core-concepts/task_workflows.html#task-design-workflows)] 
-    
-    -  What is the different between `Manager-based` and `Direct` workflows? 
-    
-    - If you're just starting to use `IsaacLab`, which workflow should you choose?
-
-    1.2 Actuators [Optional] [[link](https://isaac-sim.github.io/IsaacLab/v2.1.0/source/overview/core-concepts/actuators.html#actuators)]
-
-    - How does the physics engine handle `position` and `velocity` control differently from `torque` control?
-
-    - What limitation exists when simulating actuators compared to real-world robot behavior?
-
-2. **Developer’s Guide**  
-    
-    2.1 Setting up Visual Studio Code [[link](https://isaac-sim.github.io/IsaacLab/v2.1.0/source/overview/developer-guide/vs_code.html#setting-up-visual-studio-code)]
-
-    - How to setup VS Code IDE for `debugging` python code?
-
-    - How to use different `python interpreters`?
-
-    2.2 Repository organization [[link](https://isaac-sim.github.io/IsaacLab/v2.1.0/source/overview/developer-guide/repo_structure.html#repository-organization)]
-
-    - How to find source code for all Isaac Lab `extensions` and `standalone applications`?
-
-    -  What is the different between `extensions` and `standalone applications`? 
-
-    2.3 Application Development [Optional] [[link](https://isaac-sim.github.io/IsaacLab/v2.1.0/source/overview/developer-guide/development.html#application-development)]
-
-    - Why do scripts need to be structured as `extensions` and `standalone applications`?
-
-    2.4 Building your Own Project [Optional] [[link](https://isaac-sim.github.io/IsaacLab/v2.1.0/source/overview/developer-guide/template.html#building-your-own-project)]
-
-3. **Sensors** [Optional] 
-
-    This section provides an overview of the `sensor APIs` available in Isaac Lab.
-
-    3.1 Camera [[link](https://isaac-sim.github.io/IsaacLab/v2.1.0/source/overview/sensors/camera.html#camera)]
-
-    3.2 Contact Sensor [[link](https://isaac-sim.github.io/IsaacLab/v2.1.0/source/overview/sensors/contact_sensor.html#contact-sensor)]
-
-    3.3 Frame Transformer [[link](https://isaac-sim.github.io/IsaacLab/v2.1.0/source/overview/sensors/frame_transformer.html#frame-transformer)]
-
-    3.4 Ray Caster [[link](https://isaac-sim.github.io/IsaacLab/v2.1.0/source/overview/sensors/ray_caster.html#ray-caster)]
-
-## Available Environments
-
-The following lists comprises of all the `RL tasks` implementations that are available in Isaac Lab. [[link](https://isaac-sim.github.io/IsaacLab/v2.1.0/source/overview/environments.html)]
-
-or
-
-you can excute following command line
+### Model Checkpoints
 
 ```
-python scripts/environments/list_envs.py
+w/{task}/
+├── Linear_QN/
+│   └── Linear_QN_{episode}.json
+├── DQN/
+│   └── DQN_{episode}.pt
+├── MC_REINFORCE/
+│   └── MC_REINFORCE_{episode}.pt
+├── AC/
+│   └── AC_{episode}.pt
+├── A2C/
+│   └── A2C_{episode}.pt
+├── PPO/
+│   └── PPO_{episode}.pt
+├── TD3/
+│   └── TD3_{episode}.pt
+└── SAC/
+    └── SAC_{episode}.pt
 ```
 
-![image-2](https://github.com/user-attachments/assets/9f5f0ac4-7c38-4378-b3da-a74caf90bac9)
+---
 
-## Tutorials
+## Project Structure
 
-We recommend that you go through the tutorials in the order they are listed here.
+| File / Folder                                         | Purpose                                                        |
+| ----------------------------------------------------- | -------------------------------------------------------------- |
+| `scripts/Function_based/train_all.py`                 | Train all 8 algorithms + generate all comparison/deploy plots  |
+| `scripts/Function_based/train.py`                     | Train single algorithm                                         |
+| `scripts/Function_based/play.py`                      | Deployment evaluation (deterministic inference)                |
+| `RL_Algorithm/RL_base_function.py`                    | Base class: `scale_action`, `decay_epsilon`, `plot_durations`  |
+| `RL_Algorithm/storage/buffers.py`                     | `RolloutBuffer` (on-policy) and `ReplayBuffer` (off-policy)   |
+| `RL_Algorithm/storage/on_policy.py`                   | `OnPolicyAlgorithm` base for AC, A2C, PPO                     |
+| `RL_Algorithm/storage/off_policy.py`                  | `OffPolicyAlgorithm` base for DQN, TD3, SAC                   |
+| `RL_Algorithm/networks/mlp.py`                        | Shared `MLP` backbone (relu / elu / tanh activations)          |
+| `RL_Algorithm/Function_based/Linear_Q.py`             | Linear function approximation Q-Learning                      |
+| `RL_Algorithm/Function_based/DQN.py`                  | Deep Q-Network with experience replay + target network         |
+| `RL_Algorithm/Function_based/MC_REINFORCE.py`         | Monte Carlo REINFORCE policy gradient                          |
+| `RL_Algorithm/Function_based/AC.py`                   | Actor-Critic (MC episodic)                                     |
+| `RL_Algorithm/Function_based/A2C.py`                  | Advantage Actor-Critic (TD + GAE)                              |
+| `RL_Algorithm/Function_based/PPO.py`                  | Proximal Policy Optimization (clipped surrogate + GAE)         |
+| `RL_Algorithm/Function_based/TD3.py`                  | Twin Delayed DDPG (twin critics + delayed policy updates)      |
+| `RL_Algorithm/Function_based/SAC.py`                  | Soft Actor-Critic (max entropy + auto temperature tuning)      |
+| `source/CartPole/CartPole/tasks/`                     | IsaacLab task definition (reward, termination, MDP)            |
 
-*Note: There is no need to follow the order of the tutorial in page via `next` button.*
+---
 
-### Simulation Overview 
+## Summary of Results
 
-1. **Setting up a Simple Simulation** 
+### Training Performance
 
-    1.1 Creating an empty scene [[link](https://isaac-sim.github.io/IsaacLab/v2.1.0/source/tutorials/00_sim/create_empty.html)] 
+| Algorithm      | Solved (ep) | Final Avg Reward | Training Stability |
+| -------------- | ----------- | ---------------- | ------------------ |
+| Linear_QN      | Never       | ~40              | Stable but low     |
+| DQN            | Never       | ~10              | Diverged early     |
+| MC_REINFORCE   | Never       | ~35              | High variance      |
+| AC             | 246         | ~500             | Occasional dips    |
+| A2C            | 234         | ~500             | Collapse at ep 2k  |
+| **PPO**        | **100**     | **~500**         | **Most stable**    |
+| TD3            | 3599        | ~500             | Slow convergence   |
+| SAC            | 531         | ~500             | Volatile throughout|
 
-    1.2 Spawning prims into the scene [[link](https://isaac-sim.github.io/IsaacLab/v2.1.0/source/tutorials/00_sim/spawn_prims.html)]
+*Solved = first episode where 100-episode rolling average ≥ 450 steps.*
 
-    1.3 Deep-dive into AppLauncher [[link](https://isaac-sim.github.io/IsaacLab/v2.1.0/source/tutorials/00_sim/launch_app.html)] 
+### Deployment Performance (100 episodes, deterministic policy)
 
-2. **Interacting with Assets** 
+| Algorithm      | Avg Reward | Avg Length | Success Rate | Mean \|θ\| (°) | Std θ (°) |
+| -------------- | ---------- | ---------- | ------------ | -------------- | --------- |
+| Linear_QN      | 7.7        | 11.2       | 0%           | 8.85           | 10.17     |
+| DQN            | 6.3        | 9.9        | 0%           | 9.31           | 6.23      |
+| MC_REINFORCE   | 22.4       | 26.9       | 0%           | 10.93          | 8.48      |
+| AC             | 441.4      | 444.5      | 34%          | 1.73           | 2.50      |
+| **A2C**        | **499.9**  | **500.0**  | **100%**     | **0.12**       | **0.50**  |
+| **PPO**        | **500.0**  | **500.0**  | **100%**     | 0.23           | **0.42**  |
+| TD3            | 499.3      | 500.0      | 100%         | 0.98           | 2.02      |
+| SAC            | 497.9      | 500.0      | 100%         | 2.95           | 3.69      |
 
-    2.1 Interacting with a rigid object [[link](https://isaac-sim.github.io/IsaacLab/v2.1.0/source/tutorials/01_assets/run_rigid_object.html)]
+**Overall Winner: PPO** — fastest to solve (ep 100), most stable training, perfect deployment (500.0 avg reward, 100% success).
 
-    2.2 Interacting with an articulation [[link](https://isaac-sim.github.io/IsaacLab/v2.1.0/source/tutorials/01_assets/run_articulation.html)]
-
-3. **Creating a Scene**
-
-    3.1 Using the Interactive Scene [[link](https://isaac-sim.github.io/IsaacLab/v2.1.0/source/tutorials/02_scene/create_scene.html)]
-
-### Task Design Workflows
-
-For more detail of different workflows for designing environments. [[link](https://isaac-sim.github.io/IsaacLab/v2.1.0/source/overview/core-concepts/task_workflows.html)]
-
-4. **Designing an Environment** [[link](https://isaac-sim.github.io/IsaacLab/v2.1.0/source/tutorials/index.html#designing-an-environment)]
-
-    `HW0 Requirement`: You need to understand `Creating a Manager-Based Base Environment` and `Creating a Manager-Based RL Environment` for designing an environment.
-
-    4.1 `Creating a Manager-Based Base Environment` [[link](https://isaac-sim.github.io/IsaacLab/v2.1.0/source/tutorials/03_envs/create_manager_base_env.html)]
-
-    4.2 `Creating a Manager-Based RL Environment` [[link](https://isaac-sim.github.io/IsaacLab/v2.1.0/source/tutorials/03_envs/create_manager_rl_env.html)]
-
-    4.3 `Registering an Environment` [[link](https://isaac-sim.github.io/IsaacLab/v2.1.0/source/tutorials/03_envs/register_rl_env_gym.html#registering-an-environment)]
-
-    4.4 `Training with an RL Agent` [[link](https://isaac-sim.github.io/IsaacLab/v2.1.0/source/tutorials/03_envs/run_rl_training.html#training-with-an-rl-agent)]
-
-## How-to Guides [Optional]
-
-This section includes guides that help you use Isaac Lab. 
-These are intended for users who have already worked through the tutorials and are looking for more information on how to use Isaac Lab. 
-If you are new to Isaac Lab, we recommend you start with the tutorials. [[link](https://isaac-sim.github.io/IsaacLab/v2.1.0/source/how-to/index.html#how-to-guides)]
+**Best Pole Control: A2C** — lowest mean absolute pole angle (0.12°) during deployment.
