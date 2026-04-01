@@ -155,7 +155,7 @@ Algorithms are organized across three categories to evaluate the effect of appro
 All outputs are saved in the `plots/` and `w/` folders, organized by algorithm:
 
 ```
-plots/Stabilize/Function_based/
+plots/Function_based/
 ├── Linear_QN/
 │   ├── learning_curve.png
 │   ├── episode_length_curve.png
