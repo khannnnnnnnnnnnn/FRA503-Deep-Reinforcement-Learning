@@ -1,4 +1,4 @@
-# Final Project: Splendor DDQN Agent (Enhanced)
+# Final Project: Splendor DDQN Agent
 
 **Authors**
 - Chantouch Orungrote (66340500011)
